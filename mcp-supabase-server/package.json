@@ -1,0 +1,19 @@
+{
+  "name": "mcp-supabase-server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["mcp", "supabase", "model-context-protocol"],
+  "author": "",
+  "license": "ISC",
+  "description": "MCP Server for Supabase integration",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1"
+  }
+}

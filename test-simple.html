@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카카오톡 공유 테스트</title>
+    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 600px; 
+            margin: 50px auto; 
+            padding: 20px; 
+            text-align: center;
+        }
+        .btn { 
+            background: #FEE500; 
+            color: #000; 
+            border: none; 
+            padding: 15px 30px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 16px;
+            margin: 10px;
+        }
+        .btn:hover { background: #fdd835; }
+        .result { 
+            background: #f0f8ff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            margin: 20px 0; 
+        }
+    </style>
+</head>
+<body>
+    <h1>🎉 카카오톡 공유 테스트</h1>
+    <p>노후 생활비 계산 결과를 카카오톡으로 공유해보세요!</p>
+    
+    <div class="result">
+        <h3>📊 계산 결과 (샘플)</h3>
+        <p><strong>김할머니님 (75세 여성)</strong></p>
+        <p>💰 월간 총 생활비: 245만원</p>
+        <p>🎯 남은 인생 총 필요금액: 4억 4,100만원</p>
+        <p>⏳ 예상 잔여기간: 18년</p>
+    </div>
+
+    <button class="btn" onclick="shareToKakao()">📱 카카오톡으로 공유하기</button>
+    <button class="btn" onclick="testSDK()" style="background: #e8f5e8;">🔧 SDK 상태 확인</button>
+
+    <div id="result" style="margin-top: 20px;"></div>
+
+    <script>
+        // 카카오 SDK 초기화
+        if (window.Kakao && !window.Kakao.isInitialized()) {
+            window.Kakao.init('e3f519b0aadd7135da3701eb0bde4631');
+            console.log('카카오 SDK 초기화 완료');
+        }
+
+        // SDK 상태 확인
+        function testSDK() {
+            const result = document.getElementById('result');
+            if (window.Kakao) {
+                if (window.Kakao.isInitialized()) {
+                    result.innerHTML = '✅ 카카오 SDK가 정상적으로 초기화되었습니다!';
+                    result.style.color = 'green';
+                } else {
+                    result.innerHTML = '❌ 카카오 SDK가 초기화되지 않았습니다.';
+                    result.style.color = 'red';
+                }
+            } else {
+                result.innerHTML = '❌ 카카오 SDK가 로드되지 않았습니다.';
+                result.style.color = 'red';
+            }
+        }
+
+        // 카카오톡 공유하기
+        function shareToKakao() {
+            const result = document.getElementById('result');
+            
+            if (!window.Kakao) {
+                result.innerHTML = '❌ 카카오톡 SDK가 로드되지 않았습니다.';
+                result.style.color = 'red';
+                return;
+            }
+
+            if (!window.Kakao.isInitialized()) {
+                result.innerHTML = '❌ 카카오톡 SDK가 초기화되지 않았습니다.';
+                result.style.color = 'red';
+                return;
+            }
+
+            try {
+                window.Kakao.Share.sendDefault({
+                    objectType: 'feed',
+                    content: {
+                        title: '🎉 노후 생활비 계산 결과',
+                        description: '김할머니님(75세 여성)의 계산 결과\n\n📊 월간 총 생활비: 245만원\n💰 남은 인생 총 필요금액: 4억 4,100만원\n⏳ 예상 잔여기간: 18년\n\n나도 계산해보기 👇',
+                        imageUrl: 'https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_medium.png',
+                        link: {
+                            mobileWebUrl: window.location.href,
+                            webUrl: window.location.href
+                        }
+                    },
+                    buttons: [
+                        {
+                            title: '나도 계산해보기',
+                            link: {
+                                mobileWebUrl: window.location.href,
+                                webUrl: window.location.href
+                            }
+                        }
+                    ]
+                });
+
+                result.innerHTML = '✅ 카카오톡 공유하기가 실행되었습니다!';
+                result.style.color = 'green';
+
+            } catch (error) {
+                console.error('카카오톡 공유 오류:', error);
+                result.innerHTML = '❌ 카카오톡 공유 중 오류가 발생했습니다: ' + error.message;
+                result.style.color = 'red';
+            }
+        }
+
+        // 페이지 로드 시 자동으로 SDK 상태 확인
+        window.addEventListener('load', function() {
+            setTimeout(testSDK, 1000);
+        });
+    </script>
+</body>
+</html> 

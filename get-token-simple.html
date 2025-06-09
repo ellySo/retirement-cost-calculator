@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카카오 토큰 발급 (간단버전)</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .result { background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; word-break: break-all; }
+        button { background: #FEE500; color: #000; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>🔑 카카오 Access Token 발급</h2>
+    
+    <p><strong>REST API Key:</strong> e3f519b0aadd7135da3701eb0bde4631</p>
+    <p><strong>채널 ID:</strong> 엄마를부탁해노인돌봄</p>
+    
+    <button onclick="login()">1. 카카오 로그인하기</button>
+    
+    <div id="result" class="result" style="display: none;">
+        <h3>발급된 Access Token:</h3>
+        <div id="token"></div>
+        <br>
+        <h4>환경변수 설정용:</h4>
+        <code id="envVar"></code>
+    </div>
+
+    <script>
+        function login() {
+            const url = `https://kauth.kakao.com/oauth/authorize?client_id=e3f519b0aadd7135da3701eb0bde4631&redirect_uri=${encodeURIComponent(window.location.href)}&response_type=code&scope=talk_message`;
+            window.location.href = url;
+        }
+
+        // URL에서 code 확인하고 토큰 교환
+        window.onload = async function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            
+            if (code) {
+                try {
+                    const response = await fetch('https://kauth.kakao.com/oauth/token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `grant_type=authorization_code&client_id=e3f519b0aadd7135da3701eb0bde4631&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}&code=${code}`
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.access_token) {
+                        document.getElementById('token').textContent = data.access_token;
+                        document.getElementById('envVar').textContent = `KAKAO_ACCESS_TOKEN=${data.access_token}`;
+                        document.getElementById('result').style.display = 'block';
+                        
+                        // URL 정리
+                        window.history.replaceState({}, '', window.location.pathname);
+                        alert('✅ 토큰 발급 완료!');
+                    } else {
+                        alert('❌ 토큰 발급 실패: ' + JSON.stringify(data));
+                    }
+                } catch (error) {
+                    alert('❌ 오류: ' + error.message);
+                }
+            }
+        };
+    </script>
+</body>
+</html> 

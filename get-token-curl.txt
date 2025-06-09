@@ -1,0 +1,17 @@
+# 1단계: 아래 URL을 브라우저에서 열어 인증코드 받기
+https://kauth.kakao.com/oauth/authorize?client_id=e3f519b0aadd7135da3701eb0bde4631&redirect_uri=https://developers.kakao.com/tool/rest-api&response_type=code&scope=talk_message
+
+# 2단계: 받은 인증코드를 아래 {CODE}에 넣고 실행 (PowerShell)
+curl -X POST https://kauth.kakao.com/oauth/token `
+  -H "Content-Type: application/x-www-form-urlencoded" `
+  -d "grant_type=authorization_code&client_id=e3f519b0aadd7135da3701eb0bde4631&redirect_uri=https://developers.kakao.com/tool/rest-api&code={여기에_받은_CODE_입력}"
+
+# 또는 PowerShell Invoke-RestMethod 사용:
+$body = @{
+    grant_type = "authorization_code"
+    client_id = "e3f519b0aadd7135da3701eb0bde4631"
+    redirect_uri = "https://developers.kakao.com/tool/rest-api"
+    code = "여기에_받은_CODE_입력"
+}
+
+Invoke-RestMethod -Uri "https://kauth.kakao.com/oauth/token" -Method POST -Body $body -ContentType "application/x-www-form-urlencoded" 

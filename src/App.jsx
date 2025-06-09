@@ -1,11 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import html2canvas from 'html2canvas';
+import { supabase } from './supabaseClient';
 import './App.css';
 
 function App() {
   // 기본 테스트를 위한 임시 코드
   console.log('App component is loading...');
+  console.log('React is working!');
+  
+  // 임시 테스트: 간단한 화면을 먼저 렌더링해보기
+  const isTestMode = false; // 테스트 모드 비활성화
+  
+  if (isTestMode) {
+    return (
+      <div style={{
+        padding: '20px',
+        textAlign: 'center',
+        fontFamily: 'Arial, sans-serif'
+      }}>
+        <h1>🎯 React App이 정상적으로 작동 중입니다!</h1>
+        <p>현재 시간: {new Date().toLocaleString()}</p>
+        <button onClick={() => alert('버튼이 작동합니다!')}>
+          테스트 버튼
+        </button>
+      </div>
+    );
+  }
   
   const [currentStep, setCurrentStep] = useState('home'); // home, survey, result, community
   const [surveyStep, setSurveyStep] = useState(1); // 1, 2, 3
@@ -24,6 +45,15 @@ function App() {
   
   // 결과 화면 캡처를 위한 ref
   const resultRef = useRef(null);
+
+  // 카카오톡 공유를 위한 상태 변수들
+  const [showKakaoModal, setShowKakaoModal] = useState(false);
+  const [kakaoForm, setKakaoForm] = useState({
+    realName: '',
+    phoneNumber: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [calculationId, setCalculationId] = useState(null);
 
   const [surveyData, setSurveyData] = useState({
     // Step 1 data
@@ -45,6 +75,14 @@ function App() {
       emergency: 80000       // 비상금
     }
   });
+
+  // 카카오 SDK 초기화
+  useEffect(() => {
+    if (window.Kakao && !window.Kakao.isInitialized()) {
+      window.Kakao.init('e3f519b0aadd7135da3701eb0bde4631'); // REST API 키 사용
+      console.log('카카오 SDK 초기화 완료');
+    }
+  }, []);
 
   // 로컬 스토리지에서 포스트 로드
   useEffect(() => {
@@ -351,9 +389,71 @@ function App() {
     };
   };
 
-  // 설문 완료 시 데이터 저장
-  const saveSubmissionData = () => {
+  // 설문 완료 시 데이터 저장 (Supabase 연동)
+  const saveSubmissionData = async () => {
     const results = calculateResults();
+    
+    console.log('=== Supabase 저장 시작 ===');
+    console.log('저장할 데이터:', {
+      nickname: surveyData.nickname,
+      gender: surveyData.gender,
+      age: parseInt(surveyData.currentAge),
+      monthly_total: results.monthlyTotal,
+      yearly_total: results.yearlyTotal,
+      total_needed: results.totalNeeded,
+      remaining_years: results.remainingYears,
+      cost_breakdown: surveyData.costs
+    });
+    
+    try {
+      // Supabase에 계산 결과 저장
+      console.log('Supabase insert 시작...');
+      const { data, error } = await supabase
+        .from('user_calculations')
+        .insert([
+          {
+            nickname: surveyData.nickname,
+            gender: surveyData.gender,
+            age: parseInt(surveyData.currentAge),
+            monthly_total: results.monthlyTotal,
+            yearly_total: results.yearlyTotal,
+            total_needed: results.totalNeeded,
+            remaining_years: results.remainingYears,
+            cost_breakdown: surveyData.costs
+          }
+        ])
+        .select()
+        .single();
+
+      console.log('Supabase 응답:', { data, error });
+
+      if (error) {
+        console.error('Supabase 저장 오류:', error);
+        console.error('에러 상세:', error.message, error.details, error.hint);
+        // 실패 시 로컬 스토리지에 저장
+        saveToLocalStorage(results);
+        return;
+      }
+
+      // 성공 시 calculation ID 저장
+      if (data) {
+        setCalculationId(data.id);
+        console.log('✅ Supabase 저장 성공!', data);
+        alert('데이터가 성공적으로 저장되었습니다!');
+      }
+
+      // 로컬 스토리지에도 저장 (통계용)
+      saveToLocalStorage(results);
+      
+    } catch (error) {
+      console.error('❌ 데이터 저장 중 예외 발생:', error);
+      // 실패 시 로컬 스토리지에 저장
+      saveToLocalStorage(results);
+    }
+  };
+
+  // 로컬 스토리지에 저장 (기존 기능 유지)
+  const saveToLocalStorage = (results) => {
     const submissionData = {
       age: surveyData.currentAge,
       gender: surveyData.gender,
@@ -425,6 +525,103 @@ function App() {
         button.textContent = '이미지 저장';
         button.disabled = false;
       }
+    }
+  };
+
+  // 카카오톡 공유를 위한 개인정보 수집
+  const handleKakaoSubmit = async () => {
+    if (!kakaoForm.realName.trim() || !kakaoForm.phoneNumber.trim()) {
+      alert('이름과 휴대폰번호를 모두 입력해주세요.');
+      return;
+    }
+
+    // 휴대폰번호 형식 검증
+    const phoneRegex = /^01[016789]-?\d{3,4}-?\d{4}$/;
+    if (!phoneRegex.test(kakaoForm.phoneNumber.replace(/\s/g, ''))) {
+      alert('올바른 휴대폰번호 형식이 아닙니다. (예: 010-1234-5678)');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Supabase에 추가 정보 업데이트
+      if (calculationId) {
+        const { error } = await supabase
+          .from('user_calculations')
+          .update({
+            real_name: kakaoForm.realName,
+            phone_number: kakaoForm.phoneNumber
+          })
+          .eq('id', calculationId);
+
+        if (error) {
+          console.error('개인정보 업데이트 오류:', error);
+        }
+      }
+
+      // 카카오톡 공유하기 실행
+      await shareToKakao();
+      
+      alert('카카오톡 공유하기가 실행되었습니다!');
+      setShowKakaoModal(false);
+      setKakaoForm({ realName: '', phoneNumber: '' });
+      
+    } catch (error) {
+      console.error('카카오톡 공유 오류:', error);
+      alert('카카오톡 공유 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 카카오톡 공유하기 함수
+  const shareToKakao = async () => {
+    if (!window.Kakao) {
+      alert('카카오톡 SDK가 로드되지 않았습니다.');
+      return;
+    }
+
+    const results = calculateResults();
+    const currentUrl = window.location.href;
+
+    try {
+      window.Kakao.Share.sendDefault({
+        objectType: 'feed',
+        content: {
+          title: '🎉 노후 생활비 계산 결과',
+          description: `${surveyData.nickname}님(${surveyData.currentAge}세 ${surveyData.gender === 'male' ? '남성' : '여성'})의 계산 결과\n\n📊 월간 총 생활비: ${formatCurrency(results.monthlyTotal)}\n💰 남은 인생 총 필요금액: ${formatCurrency(results.totalNeeded)}\n⏳ 예상 잔여기간: ${results.remainingYears}년\n\n나도 계산해보기 👇`,
+          imageUrl: 'https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_medium.png',
+          link: {
+            mobileWebUrl: currentUrl,
+            webUrl: currentUrl
+          }
+        },
+        buttons: [
+          {
+            title: '나도 계산해보기',
+            link: {
+              mobileWebUrl: currentUrl,
+              webUrl: currentUrl
+            }
+          }
+        ]
+      });
+
+      // Supabase에 카카오톡 공유 상태 업데이트
+      if (calculationId) {
+        await supabase
+          .from('user_calculations')
+          .update({
+            kakao_sent: true,
+            kakao_sent_at: new Date().toISOString()
+          })
+          .eq('id', calculationId);
+      }
+
+    } catch (error) {
+      console.error('카카오톡 공유 오류:', error);
+      throw error;
     }
   };
 
@@ -896,6 +1093,12 @@ function App() {
             >
               🖼️ 이미지 저장
             </button>
+            <button 
+              className="btn-primary kakao-send-btn"
+              onClick={() => setShowKakaoModal(true)}
+            >
+              📱 카카오톡으로 공유하기
+            </button>
           </div>
         </div>
       </main>
@@ -1192,6 +1395,78 @@ function App() {
     );
   };
 
+  // 카카오톡 전송 모달 렌더링
+  const renderKakaoModal = () => {
+    if (!showKakaoModal) return null;
+
+    return (
+      <div className="modal-overlay" onClick={() => setShowKakaoModal(false)}>
+        <div className="modal-content kakao-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>📱 카카오톡으로 결과 공유하기</h3>
+            <button className="modal-close" onClick={() => setShowKakaoModal(false)}>×</button>
+          </div>
+          
+          <div className="modal-body">
+            <div className="kakao-info">
+              <p>📋 계산 결과를 카카오톡으로 공유하실 수 있습니다.</p>
+              <p>🔒 개인정보는 안전하게 보호되며, 공유 목적으로만 사용됩니다.</p>
+            </div>
+            
+            <div className="form-group">
+              <label>이름</label>
+              <input
+                type="text"
+                value={kakaoForm.realName}
+                onChange={(e) => setKakaoForm({...kakaoForm, realName: e.target.value})}
+                placeholder="실명을 입력해주세요"
+                disabled={isSubmitting}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>휴대폰번호</label>
+              <input
+                type="tel"
+                value={kakaoForm.phoneNumber}
+                onChange={(e) => setKakaoForm({...kakaoForm, phoneNumber: e.target.value})}
+                placeholder="010-1234-5678"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="privacy-notice">
+              <p>📝 수집되는 개인정보:</p>
+              <ul>
+                <li>• 닉네임, 성별, 나이 (계산 시 입력)</li>
+                <li>• 계산된 월간 생활비 및 총 필요 금액</li>
+                <li>• 이름, 휴대폰번호 (공유용)</li>
+              </ul>
+              <p>🔐 개인정보는 공유 후 안전하게 관리됩니다.</p>
+            </div>
+          </div>
+          
+          <div className="modal-footer">
+            <button 
+              className="btn-secondary" 
+              onClick={() => setShowKakaoModal(false)}
+              disabled={isSubmitting}
+            >
+              취소
+            </button>
+            <button 
+              className="btn-primary" 
+              onClick={handleKakaoSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? '공유 중...' : '📱 카카오톡 공유'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="App">
       <nav className="navbar">
@@ -1249,6 +1524,7 @@ function App() {
       {currentStep === 'community' && renderCommunity()}
       {renderShareModal()}
       {renderDetailModal()}
+      {renderKakaoModal()}
     </div>
   );
 }
